@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContaSystem - Gestión Contable</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: #3498db;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .logo-text h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .logo-text p {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .menu-section {
+            padding: 20px 0;
+        }
+
+        .menu-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.5);
+            padding: 0 20px 10px;
+            letter-spacing: 1px;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        .menu-item.active {
+            background: rgba(52, 152, 219, 0.2);
+            border-left-color: #3498db;
+            color: white;
+        }
+
+        .menu-item-icon {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-toggle {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .page-subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        /* Cards Dashboard */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .card-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .card-description {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        /* Formularios */
+        .form-container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+        }
+
+        .form-section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .form-input, .form-select {
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .form-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #3498db;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        /* Botones */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        /* Tablas */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .table-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            padding: 8px 12px 8px 36px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            width: 300px;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #f8f9fa;
+        }
+
+        th {
+            padding: 12px 20px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 16px 20px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .badge-error {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+
+        .badge-warning {
+            background: #fff3cd;
+            color: #f39c12;
+        }
+
+        .badge-info {
+            background: #d6eaf8;
+            color: #3498db;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 14px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-error {
+            background: #fadbd8;
+            color: #c0392b;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .alert-success {
+            background: #d5f4e6;
+            color: #1e8449;
+            border-left: 4px solid #27ae60;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #b7791f;
+            border-left: 4px solid #f39c12;
+        }
+
+        .alert-info {
+            background: #d6eaf8;
+            color: #1f618d;
+            border-left: 4px solid #3498db;
+        }
+
+        /* Utilities */
+        .hidden {
+            display: none !important;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .mt-20 {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo">
+            <div class="logo-icon">📊</div>
+            <div class="logo-text">
+                <h1>ContaSystem</h1>
+                <p>Gestión Contable</p>
+            </div>
+        </div>
+        
+        <div class="menu-section">
+            <div class="menu-title">MÓDULOS</div>
+            <div class="menu-item active" data-page="dashboard">
+                <span class="menu-item-icon">📈</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="menu-item" data-page="empresa">
+                <span class="menu-item-icon">🏢</span>
+                <span>Empresa</span>
+            </div>
+            <div class="menu-item" data-page="resoluciones">
+                <span class="menu-item-icon">📋</span>
+                <span>Resoluciones DIAN</span>
+            </div>
+            <div class="menu-item" data-page="clientes">
+                <span class="menu-item-icon">👥</span>
+                <span>Clientes</span>
+            </div>
+            <div class="menu-item" data-page="productos">
+                <span class="menu-item-icon">📦</span>
+                <span>Productos</span>
+            </div>
+            <div class="menu-item" data-page="facturacion">
+                <span class="menu-item-icon">🧾</span>
+                <span>Facturación</span>
+            </div>
+            <div class="menu-item" data-page="documentos">
+                <span class="menu-item-icon">📄</span>
+                <span>Documentos</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="header">
+            <button class="header-toggle">☰</button>
+        </div>
+
+        <div class="content">
+            <!-- Dashboard Page -->
+            <div id="page-dashboard" class="page">
+                <h1 class="page-title">Dashboard</h1>
+                <p class="page-subtitle">Resumen general del sistema contable</p>
+
+                <div class="cards-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Documentos</span>
+                            <div class="card-icon" style="background: #e3f2fd; color: #2196f3;">📄</div>
+                        </div>
+                        <div class="card-value" id="stat-documentos">0</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Facturas</span>
+                            <div class="card-icon" style="background: #f3e5f5; color: #9c27b0;">🧾</div>
+                        </div>
+                        <div class="card-value" id="stat-facturas">0</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Clientes Activos</span>
+                            <div class="card-icon" style="background: #e8f5e9; color: #4caf50;">👥</div>
+                        </div>
+                        <div class="card-value" id="stat-clientes">0</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Productos Activos</span>
+                            <div class="card-icon" style="background: #fff3e0; color: #ff9800;">📦</div>
+                        </div>
+                        <div class="card-value" id="stat-productos">0</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Procesados</span>
+                            <div class="card-icon" style="background: #e0f2f1; color: #009688;">✅</div>
+                        </div>
+                        <div class="card-value" id="stat-procesados">0</div>
+                        <div class="card-description">documentos procesados</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Con Errores</span>
+                            <div class="card-icon" style="background: #ffebee; color: #f44336;">⚠️</div>
+                        </div>
+                        <div class="card-value" id="stat-errores">0</div>
+                        <div class="card-description">documentos con errores</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title">Ventas Facturadas</span>
+                            <div class="card-icon" style="background: #e8eaf6; color: #3f51b5;">💰</div>
+                        </div>
+                        <div class="card-value" id="stat-ventas">$ 0</div>
+                        <div class="card-description">total facturado</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empresa Page -->
+            <div id="page-empresa" class="page hidden">
+                <h1 class="page-title">Configuración de Empresa</h1>
+                <p class="page-subtitle">Datos generales y configuración tributaria</p>
+
+                <form id="form-empresa" class="form-container">
+                    <div class="form-section">
+                        <h3 class="form-section-title">Datos Generales</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Razón Social</label>
+                                <input type="text" name="razon_social" class="form-input" placeholder="Razón social de la empresa">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">NIT</label>
+                                <input type="text" name="nit" class="form-input" placeholder="900123456">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Dígito de Verificación</label>
+                                <input type="text" name="digito_verificacion" class="form-input" maxlength="1">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Dirección</label>
+                                <input type="text" name="direccion" class="form-input" placeholder="Cra 1 # 2-3">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Ciudad</label>
+                                <input type="text" name="ciudad" class="form-input">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Departamento</label>
+                                <input type="text" name="departamento" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Teléfono</label>
+                                <input type="text" name="telefono" class="form-input">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Email</label>
+                                <input type="email" name="email" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Sitio Web</label>
+                                <input type="text" name="sitio_web" class="form-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">Configuración Tributaria</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Régimen</label>
+                                <select name="regimen" class="form-select">
+                                    <option value="">Seleccione...</option>
+                                    <option value="Común">Común</option>
+                                    <option value="Simplificado">Simplificado</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Tipo de Organización</label>
+                                <select name="tipo_organizacion" class="form-select">
+                                    <option value="">Seleccione...</option>
+                                    <option value="Persona Jurídica">Persona Jurídica</option>
+                                    <option value="Persona Natural">Persona Natural</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Actividad Económica</label>
+                                <input type="text" name="actividad_economica" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Código CIIU</label>
+                                <input type="text" name="codigo_ciiu" class="form-input">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <div class="form-toggle">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="responsable_iva">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="form-label">Responsable de IVA</span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="form-toggle">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="autorretenedor">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="form-label">Autorretenedor</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <div class="form-toggle">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="gran_contribuyente">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="form-label">Gran Contribuyente</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+                </form>
+            </div>
+
+            <!-- Resoluciones Page -->
+            <div id="page-resoluciones" class="page hidden">
+                <h1 class="page-title">Resoluciones DIAN</h1>
+                <p class="page-subtitle">Gestión de resoluciones de facturación</p>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">Listado de Resoluciones</span>
+                        <button class="btn btn-primary" onclick="showModal('modal-resolucion')">
+                            + Nueva Resolución
+                        </button>
+                    </div>
+                    <table id="table-resoluciones">
+                        <thead>
+                            <tr>
+                                <th>Resolución</th>
+                                <th>Prefijo</th>
+                                <th>Rango</th>
+                                <th>Actual</th>
+                                <th>Vigencia</th>
+                                <th>Disponibles</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" class="empty-state">
+                                    <div class="empty-state-icon">📋</div>
+                                    <p>No hay resoluciones registradas</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Clientes Page -->
+            <div id="page-clientes" class="page hidden">
+                <h1 class="page-title">Clientes</h1>
+                <p class="page-subtitle">Gestión de clientes</p>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" placeholder="Buscar por nombre o documento...">
+                        </div>
+                        <div class="table-actions">
+                            <select class="form-select">
+                                <option>Todos</option>
+                                <option>Activos</option>
+                                <option>Inactivos</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="showModal('modal-cliente')">
+                                + Nuevo Cliente
+                            </button>
+                        </div>
+                    </div>
+                    <table id="table-clientes">
+                        <thead>
+                            <tr>
+                                <th>Nombre / Razón Social</th>
+                                <th>Documento</th>
+                                <th>Email</th>
+                                <th>Ciudad</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="empty-state">
+                                    <div class="empty-state-icon">👥</div>
+                                    <p>No hay clientes</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Productos Page -->
+            <div id="page-productos" class="page hidden">
+                <h1 class="page-title">Productos</h1>
+                <p class="page-subtitle">Catálogo de productos y servicios</p>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" placeholder="Buscar por nombre o código...">
+                        </div>
+                        <button class="btn btn-primary" onclick="showModal('modal-producto')">
+                            + Nuevo Producto
+                        </button>
+                    </div>
+                    <table id="table-productos">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th>Precio</th>
+                                <th>IVA</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="empty-state">
+                                    <div class="empty-state-icon">📦</div>
+                                    <p>No hay productos</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Facturación Page -->
+            <div id="page-facturacion" class="page hidden">
+                <h1 class="page-title">Facturación</h1>
+                <p class="page-subtitle">Facturación electrónica</p>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <select class="form-select">
+                            <option>Todos</option>
+                            <option>Generadas</option>
+                            <option>Anuladas</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="showModal('modal-factura')">
+                            + Nueva Factura
+                        </button>
+                    </div>
+                    <table id="table-facturas">
+                        <thead>
+                            <tr>
+                                <th>Número</th>
+                                <th>Cliente</th>
+                                <th>Fecha</th>
+                                <th>Subtotal</th>
+                                <th>IVA</th>
+                                <th>Total</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" class="empty-state">
+                                    <div class="empty-state-icon">🧾</div>
+                                    <p>No hay facturas</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Documentos Page -->
+            <div id="page-documentos" class="page hidden">
+                <h1 class="page-title">Gestión Documental</h1>
+                <p class="page-subtitle">Subida y procesamiento OCR de documentos</p>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">Documentos Procesados</span>
+                        <div class="table-actions">
+                            <select class="form-select">
+                                <option>Todos</option>
+                                <option>Procesados</option>
+                                <option>Con errores</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="document.getElementById('file-upload').click()">
+                                📤 Subir Documento
+                            </button>
+                            <input type="file" id="file-upload" style="display: none" accept=".pdf,.png,.jpg,.jpeg" onchange="uploadDocument(this)">
+                        </div>
+                    </div>
+                    <table id="table-documentos">
+                        <thead>
+                            <tr>
+                                <th>Factura</th>
+                                <th>Fecha</th>
+                                <th>Emisor</th>
+                                <th>Cliente</th>
+                                <th>Total</th>
+                                <th>Confianza</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="8" class="empty-state">
+                                    <div class="empty-state-icon">📄</div>
+                                    <p>No hay documentos procesados</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Resolución -->
+    <div id="modal-resolucion" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Nueva Resolución</h3>
+                <button class="modal-close" onclick="closeModal('modal-resolucion')">×</button>
+            </div>
+            <form id="form-resolucion" onsubmit="saveResolucion(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Número de Resolución</label>
+                        <input type="text" name="numero_resolucion" class="form-input" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Fecha Resolución</label>
+                            <input type="date" name="fecha_resolucion" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha Vigencia</label>
+                            <input type="date" name="fecha_vigencia" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Prefijo</label>
+                        <input type="text" name="prefijo" class="form-input" placeholder="FE" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Número Inicio</label>
+                            <input type="number" name="numero_inicio" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Número Fin</label>
+                            <input type="number" name="numero_fin" class="form-input" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('modal-resolucion')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Resolución</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Cliente -->
+    <div id="modal-cliente" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Nuevo Cliente</h3>
+                <button class="modal-close" onclick="closeModal('modal-cliente')">×</button>
+            </div>
+            <form id="form-cliente" onsubmit="saveCliente(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Tipo de Persona</label>
+                        <select name="tipo_persona" class="form-select" required>
+                            <option value="Persona Jurídica">Persona Jurídica</option>
+                            <option value="Persona Natural">Persona Natural</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Razón Social</label>
+                        <input type="text" name="razon_social" class="form-input" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Tipo Documento</label>
+                            <select name="tipo_documento" class="form-select" required>
+                                <option value="NIT">NIT</option>
+                                <option value="CC">CC</option>
+                                <option value="CE">CE</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Número</label>
+                            <input type="text" name="numero_documento" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">DV</label>
+                            <input type="text" name="dv" class="form-input" maxlength="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Teléfono</label>
+                            <input type="text" name="telefono" class="form-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Dirección</label>
+                            <input type="text" name="direccion" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ciudad</label>
+                            <input type="text" name="ciudad" class="form-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Departamento</label>
+                            <input type="text" name="departamento" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Plazo de Pago (días)</label>
+                            <input type="number" name="plazo_pago" class="form-input" value="30">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="responsable_iva">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="form-label">Responsable de IVA</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('modal-cliente')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Crear Cliente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Producto -->
+    <div id="modal-producto" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Nuevo Producto</h3>
+                <button class="modal-close" onclick="closeModal('modal-producto')">×</button>
+            </div>
+            <form id="form-producto" onsubmit="saveProducto(event)">
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Código</label>
+                            <input type="text" name="codigo" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tipo</label>
+                            <select name="tipo" class="form-select" required>
+                                <option value="Servicio">Servicio</option>
+                                <option value="Producto">Producto</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" name="nombre" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Descripción</label>
+                        <input type="text" name="descripcion" class="form-input">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Precio Venta</label>
+                            <input type="number" name="precio_venta" class="form-input" step="0.01" value="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tarifa IVA (%)</label>
+                            <input type="number" name="tarifa_iva" class="form-input" step="1" value="19" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Unidad Medida</label>
+                            <input type="text" name="unidad_medida" class="form-input" value="Unidad">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('modal-producto')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Crear Producto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Factura -->
+    <div id="modal-factura" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Nueva Factura</h3>
+                <button class="modal-close" onclick="closeModal('modal-factura')">×</button>
+            </div>
+            <form id="form-factura" onsubmit="saveFactura(event)">
+                <div class="modal-body">
+                    <div id="alert-resolucion" class="alert alert-error hidden">
+                        No hay resolución DIAN activa. Cree una en el módulo de Resoluciones.
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Cliente</label>
+                            <select name="cliente_id" class="form-select" required>
+                                <option value="">Seleccionar cliente...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Resolución</label>
+                            <select name="resolucion_id" class="form-select" required>
+                                <option value="">Sin resolución</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Agregar Producto</label>
+                        <select id="producto-selector" class="form-select">
+                            <option value="">Seleccionar producto...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label">Productos agregados:</div>
+                        <div id="productos-factura" style="margin-top: 10px;">
+                            <p style="color: #999; font-size: 14px;">No hay productos agregados</p>
+                        </div>
+                    </div>
+                    <div class="form-row text-right">
+                        <div style="width: 100%; display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Subtotal:</span>
+                                <strong id="factura-subtotal">$ 0</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Descuento:</span>
+                                <strong id="factura-descuento">$ 0</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>IVA:</span>
+                                <strong id="factura-iva">$ 0</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 18px; padding-top: 8px; border-top: 2px solid #f0f0f0;">
+                                <span>Total:</span>
+                                <strong id="factura-total">$ 0</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Observaciones</label>
+                        <input type="text" name="observaciones" class="form-input">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('modal-factura')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Generar Factura</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
