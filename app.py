@@ -6,9 +6,13 @@ import os
 import json
 import PyPDF2
 import re
+from validators import DuplicateDetector, FacturaValidator
+from scheduler import init_scheduler, get_scheduler
+import atexit
 
 app = Flask(__name__)
 CORS(app)
+
 
 # Configuración
 DATABASE = 'contasystem.db'
@@ -139,9 +143,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS documentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             archivo TEXT,
+            file_hash TEXT,
             tipo_documento TEXT,
             numero_factura TEXT,
-            cufe TEXT,
+            cufe TEXT UNIQUE,
             nit_emisor TEXT,
             razon_social_emisor TEXT,
             nit_adquiriente TEXT,
@@ -153,21 +158,44 @@ def init_db():
             total REAL,
             forma_pago TEXT,
             confianza REAL,
-            estado TEXT DEFAULT 'error',
+            estado TEXT DEFAULT 'pendiente',
+            observaciones TEXT,
             texto_extraido TEXT,
             datos_json TEXT,
-            fecha_procesamiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            fecha_procesamiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            es_duplicado BOOLEAN DEFAULT 0,
+            documento_original_id INTEGER
         )
     ''')
-    
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_cufe ON documentos(cufe)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_numero_factura ON documentos(numero_factura)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_estado ON documentos(estado)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_nit_emisor ON documentos(nit_emisor)')
     conn.commit()
     conn.close()
+try:
+    init_scheduler(DATABASE)
+    print("✅ Scheduler inicializado - Tareas automáticas activadas")
+except Exception as e:
+    print(f"⚠️ Error inicializando scheduler: {e}")
 
-# Rutas - Página principal
+# Detener scheduler al cerrar
+def shutdown_scheduler():
+    try:
+        scheduler = get_scheduler()
+        if scheduler:
+            scheduler.stop()
+            print("✅ Scheduler detenido")
+    except:
+        pass
+
+atexit.register(shutdown_scheduler)
+
 @app.route('/')
 def index():
     return render_template('index.html')
-
+# Rutas - Página principal
 # API - Dashboard
 @app.route('/api/dashboard', methods=['GET'])
 def get_dashboard():
@@ -509,6 +537,20 @@ def get_documentos():
     conn.close()
     return jsonify(documentos)
 
+@app.route('/api/documentos/check-duplicate', methods=['POST'])
+def check_duplicate():
+    """Verifica si un documento ya existe antes de procesarlo"""
+    data = request.json
+    
+    detector = DuplicateDetector(DATABASE)
+    result = detector.check_duplicate(
+        cufe=data.get('cufe'),
+        numero_factura=data.get('numero_factura')
+    )
+    
+    return jsonify(result)
+
+
 @app.route('/api/documentos/upload', methods=['POST'])
 def upload_documento():
     if 'file' not in request.files:
@@ -519,14 +561,18 @@ def upload_documento():
         return jsonify({'success': False, 'message': 'Nombre de archivo vacío'}), 400
     
     # Guardar archivo
-    filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+    import hashlib
+    file_hash = hashlib.md5(file.read()).hexdigest()
+    file.seek(0)  # Reset para leer nuevamente
+    
+    filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{file_hash[:8]}_{file.filename}"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
     
     # Procesar PDF
     datos_extraidos = {}
     texto_extraido = ""
-    estado = 'error'
+    estado = 'pendiente'
     confianza = 0
     
     try:
@@ -539,14 +585,42 @@ def upload_documento():
             
             # Procesar factura
             datos_extraidos = procesar_factura(texto_extraido)
-            
-            if datos_extraidos.get('confianza', 0) >= 50:
-                estado = 'procesado'
-            
             confianza = datos_extraidos.get('confianza', 0)
+            
+            # Verificar duplicados ANTES de guardar
+            detector = DuplicateDetector(DATABASE)
+            duplicate_check = detector.check_duplicate(
+                cufe=datos_extraidos.get('cufe'),
+                numero_factura=datos_extraidos.get('numero_factura')
+            )
+            
+            if duplicate_check['is_duplicate']:
+                # Es duplicado - actualizar registro existente en lugar de crear nuevo
+                detector.merge_duplicates(
+                    duplicate_check['duplicate_id'],
+                    datos_extraidos
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'is_duplicate': True,
+                    'duplicate_id': duplicate_check['duplicate_id'],
+                    'match_type': duplicate_check['match_type'],
+                    'message': f"Documento duplicado detectado ({duplicate_check['match_type']}). Registro actualizado.",
+                    'datos': duplicate_check['duplicate_info']
+                })
+            
+            # Determinar estado inicial
+            if confianza >= 70:
+                estado = 'validado'
+            elif confianza >= 50:
+                estado = 'pendiente'
+            else:
+                estado = 'error'
             
     except Exception as e:
         texto_extraido = f"Error en procesamiento: {str(e)}"
+        estado = 'error'
         print(f"Error: {str(e)}")
     
     # Guardar en BD
@@ -554,13 +628,13 @@ def upload_documento():
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO documentos (
-            archivo, tipo_documento, numero_factura, cufe,
+            archivo, file_hash, tipo_documento, numero_factura, cufe,
             nit_emisor, razon_social_emisor, nit_adquiriente, nombre_adquiriente,
             fecha_emision, fecha_vencimiento, subtotal, iva, total, forma_pago,
             confianza, estado, texto_extraido, datos_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        filename,
+        filename, file_hash,
         datos_extraidos.get('tipo_documento', 'PDF'),
         datos_extraidos.get('numero_factura'),
         datos_extraidos.get('cufe'),
@@ -576,7 +650,7 @@ def upload_documento():
         datos_extraidos.get('forma_pago'),
         confianza,
         estado,
-        texto_extraido[:8000],  # Limitar texto
+        texto_extraido[:5000],
         json.dumps(datos_extraidos, ensure_ascii=False)
     ))
     
@@ -589,9 +663,107 @@ def upload_documento():
         'id': documento_id,
         'estado': estado,
         'confianza': confianza,
+        'is_duplicate': False,
         'datos': datos_extraidos,
         'message': f'Documento procesado con {confianza}% de confianza'
     })
+
+@app.route('/api/documentos/<int:documento_id>/validar', methods=['POST'])
+def validar_documento(documento_id):
+    """Valida un documento manualmente"""
+    validator = FacturaValidator(DATABASE)
+    validacion = validator.validar_factura(documento_id)
+    
+    # Actualizar estado según validación
+    if validacion['valido']:
+        validator.actualizar_estado(documento_id, 'validado')
+    else:
+        validator.actualizar_estado(
+            documento_id, 
+            'correccion',
+            'Errores: ' + '; '.join(validacion['errores'])
+        )
+    
+    return jsonify(validacion)
+
+
+@app.route('/api/documentos/<int:documento_id>/estado', methods=['PUT'])
+def actualizar_estado_documento(documento_id):
+    """Actualiza el estado de un documento"""
+    data = request.json
+    nuevo_estado = data.get('estado')
+    observaciones = data.get('observaciones')
+    
+    validator = FacturaValidator(DATABASE)
+    
+    try:
+        validator.actualizar_estado(documento_id, nuevo_estado, observaciones)
+        return jsonify({'success': True, 'message': 'Estado actualizado'})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/api/documentos/pendientes', methods=['GET'])
+def get_documentos_pendientes():
+    """Obtiene documentos pendientes de radicar"""
+    validator = FacturaValidator(DATABASE)
+    pendientes = validator.get_documentos_pendientes()
+    return jsonify(pendientes)
+
+
+@app.route('/api/scheduler/status', methods=['GET'])
+def get_scheduler_status():
+    """Obtiene estado del scheduler"""
+    scheduler = get_scheduler()
+    if scheduler:
+        jobs = scheduler.get_jobs_status()
+        return jsonify({
+            'running': scheduler.is_running,
+            'jobs': jobs
+        })
+    return jsonify({'running': False, 'jobs': []})
+
+
+@app.route('/api/scheduler/run/<job_id>', methods=['POST'])
+def run_scheduler_job(job_id):
+    """Ejecuta una tarea del scheduler manualmente"""
+    scheduler = get_scheduler()
+    if scheduler and scheduler.run_now(job_id):
+        return jsonify({'success': True, 'message': f'Tarea {job_id} ejecutada'})
+    return jsonify({'success': False, 'message': 'Error ejecutando tarea'}), 400
+
+@app.route('/api/documentos/<int:documento_id>/preview', methods=['GET'])
+def preview_documento(documento_id):
+    """Obtiene información para previsualizar un documento"""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT archivo, numero_factura, cufe, razon_social_emisor,
+               nombre_adquiriente, fecha_emision, total, estado, confianza,
+               texto_extraido, datos_json
+        FROM documentos WHERE id = ?
+    """, (documento_id,))
+    
+    doc = cursor.fetchone()
+    conn.close()
+    
+    if not doc:
+        return jsonify({'success': False, 'message': 'Documento no encontrado'}), 404
+    
+    return jsonify({
+        'success': True,
+        'documento': dict(doc),
+        'file_path': f"/uploads/{doc['archivo']}"
+    })
+
+
+@app.route('/uploads/<filename>')
+def serve_upload(filename):
+    """Sirve archivos subidos"""
+    return send_file(os.path.join(UPLOAD_FOLDER, filename))
+
 
 def procesar_factura(texto):
     """Procesa el texto extraído de una factura"""

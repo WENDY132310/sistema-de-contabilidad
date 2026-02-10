@@ -556,6 +556,183 @@
         .mt-20 {
             margin-top: 20px;
         }
+        .upload-area {
+            border: 3px dashed #3498db;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.3s;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .upload-area.dragover {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            transform: scale(1.02);
+        }
+
+        .upload-area-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .upload-area-text {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .upload-area-subtext {
+            font-size: 14px;
+            color: #999;
+        }
+
+        .file-selected {
+            background: #d5f4e6;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .file-selected-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-selected-name {
+            font-weight: 600;
+            color: #27ae60;
+        }
+
+        .file-selected-size {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Modal de previsualización */
+        .preview-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .preview-modal.active {
+            display: flex;
+        }
+
+        .preview-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 95%;
+            width: 1200px;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-header {
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-body {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .preview-pdf-container {
+            flex: 2;
+            background: #f5f5f5;
+            border-radius: 8px;
+            overflow: auto;
+        }
+
+        .preview-pdf-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+        }
+
+        .preview-info {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .preview-info-section {
+            margin-bottom: 24px;
+        }
+
+        .preview-info-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .preview-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .preview-info-label {
+            font-weight: 500;
+            color: #666;
+        }
+
+        .preview-info-value {
+            font-weight: 600;
+            color: #333;
+            text-align: right;
+        }
+
+        /* Estado badges en preview */
+        .estado-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .estado-pendiente { background: #fff3cd; color: #856404; }
+        .estado-validado { background: #d4edda; color: #155724; }
+        .estado-radicado { background: #d1ecf1; color: #0c5460; }
+        .estado-error { background: #f8d7da; color: #721c24; }
+        .estado-correccion { background: #ffeaa7; color: #856404; }
+
+        /* Botones de acción en preview */
+        .preview-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -962,20 +1139,46 @@
                 <h1 class="page-title">Gestión Documental</h1>
                 <p class="page-subtitle">Subida y procesamiento OCR de documentos</p>
 
+                <!-- Área de Upload Drag and Drop -->
+                <div class="upload-area" id="upload-area">
+                    <div class="upload-area-icon">📤</div>
+                    <div class="upload-area-text">Arrastra y suelta tu PDF aquí</div>
+                    <div class="upload-area-subtext">o haz click para seleccionar un archivo</div>
+                    <input type="file" id="file-upload" style="display: none" accept=".pdf" onchange="handleFileSelect(this)">
+                </div>
+                
+                <div id="file-selected" class="file-selected" style="display: none;">
+                    <div class="file-selected-info">
+                        <span style="font-size: 24px;">📄</span>
+                        <div>
+                            <div class="file-selected-name" id="selected-filename"></div>
+                            <div class="file-selected-size" id="selected-filesize"></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="uploadSelectedFile()">
+                        Procesar Documento
+                    </button>
+                </div>
+
+                <!-- Filtros -->
+                <div style="display: flex; gap: 10px; margin: 20px 0;">
+                    <select class="form-select" id="filter-estado" onchange="loadDocumentos()">
+                        <option value="">Todos los estados</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="validado">Validado</option>
+                        <option value="radicado">Radicado</option>
+                        <option value="correccion">Requiere corrección</option>
+                        <option value="error">Error</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="runSchedulerJob('validacion_8am')">
+                        🔄 Validar Ahora
+                    </button>
+                </div>
+
+                <!-- Tabla de documentos -->
                 <div class="table-container">
                     <div class="table-header">
                         <span class="table-title">Documentos Procesados</span>
-                        <div class="table-actions">
-                            <select class="form-select">
-                                <option>Todos</option>
-                                <option>Procesados</option>
-                                <option>Con errores</option>
-                            </select>
-                            <button class="btn btn-primary" onclick="document.getElementById('file-upload').click()">
-                                📤 Subir Documento
-                            </button>
-                            <input type="file" id="file-upload" style="display: none" accept=".pdf,.png,.jpg,.jpeg" onchange="uploadDocument(this)">
-                        </div>
                     </div>
                     <table id="table-documentos">
                         <thead>
@@ -1001,8 +1204,24 @@
                     </table>
                 </div>
             </div>
-        </div>
-    </div>
+
+            <!-- Modal de Preview -->
+            <div id="modal-preview" class="preview-modal">
+                <div class="preview-content">
+                    <div class="preview-header">
+                        <h3 class="modal-title">Vista Previa de Factura</h3>
+                        <button class="modal-close" onclick="closePreview()">×</button>
+                    </div>
+                    <div class="preview-body">
+                        <div class="preview-pdf-container">
+                            <iframe id="preview-iframe" src=""></iframe>
+                        </div>
+                        <div class="preview-info">
+                            <div id="preview-data"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
     <!-- Modal Resolución -->
     <div id="modal-resolucion" class="modal">

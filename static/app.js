@@ -606,8 +606,16 @@ async function saveFactura(e) {
 // Documentos
 async function loadDocumentos() {
     try {
+        // Obtener filtro de estado
+        const estadoFilter = document.getElementById('filter-estado')?.value || '';
+        
         const response = await fetch(`${API_URL}/documentos`);
-        const documentos = await response.json();
+        let documentos = await response.json();
+        
+        // Aplicar filtro
+        if (estadoFilter) {
+            documentos = documentos.filter(d => d.estado === estadoFilter);
+        }
         
         const tbody = document.querySelector('#table-documentos tbody');
         
@@ -616,7 +624,7 @@ async function loadDocumentos() {
                 <tr>
                     <td colspan="8" class="empty-state">
                         <div class="empty-state-icon">📄</div>
-                        <p>No hay documentos procesados</p>
+                        <p>No hay documentos ${estadoFilter ? 'con estado: ' + estadoFilter : ''}</p>
                     </td>
                 </tr>
             `;
@@ -625,6 +633,8 @@ async function loadDocumentos() {
         
         tbody.innerHTML = documentos.map(d => {
             const confianzaColor = d.confianza >= 70 ? '#27ae60' : d.confianza >= 50 ? '#f39c12' : '#e74c3c';
+            const estadoClass = `estado-${d.estado}`;
+            
             return `
                 <tr>
                     <td><strong>${d.numero_factura || d.archivo}</strong></td>
@@ -646,7 +656,7 @@ async function loadDocumentos() {
                             <span style="font-size: 12px; font-weight: 600; color: ${confianzaColor};">${d.confianza}%</span>
                         </div>
                     </td>
-                    <td><span class="badge ${d.estado === 'procesado' ? 'badge-success' : 'badge-error'}">${d.estado}</span></td>
+                    <td><span class="estado-badge ${estadoClass}">${d.estado}</span></td>
                     <td>
                         <button class="btn btn-secondary" onclick="verDetalleDocumento(${d.id})" 
                             style="padding: 6px 12px; font-size: 12px;">👁️ Ver</button>
@@ -780,4 +790,434 @@ function formatDate(dateString) {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleDateString('es-CO');
+}
+
+let selectedFile = null;
+
+// Inicializar drag and drop al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('upload-area');
+    const fileInput = document.getElementById('file-upload');
+    
+    if (uploadArea) {
+        // Click para abrir selector
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        // Prevenir comportamiento por defecto en drag
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        // Highlight al arrastrar sobre el área
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.add('dragover');
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.remove('dragover');
+            }, false);
+        });
+        
+        // Manejar drop
+        uploadArea.addEventListener('drop', handleDrop, false);
+    }
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    
+    if (files.length > 0) {
+        const file = files[0];
+        handleFileSelect({ files: [file] });
+    }
+}
+
+function handleFileSelect(input) {
+    const file = input.files[0];
+    
+    if (!file) return;
+    
+    // Validar que sea PDF
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+        showAlert('error', 'Solo se permiten archivos PDF');
+        return;
+    }
+    
+    // Guardar archivo seleccionado
+    selectedFile = file;
+    
+    // Mostrar información del archivo
+    document.getElementById('file-selected').style.display = 'flex';
+    document.getElementById('selected-filename').textContent = file.name;
+    document.getElementById('selected-filesize').textContent = formatFileSize(file.size);
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+async function uploadSelectedFile() {
+    if (!selectedFile) {
+        showAlert('error', 'No hay archivo seleccionado');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    
+    try {
+        showAlert('info', `Procesando ${selectedFile.name}...`);
+        
+        const response = await fetch(`${API_URL}/documentos/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Mostrar resultado
+            if (result.is_duplicate) {
+                showAlert('warning', `
+                    ⚠️ Documento duplicado detectado
+                    
+                    Coincide por: ${result.match_type === 'cufe' ? 'CUFE' : 'Número de factura'}
+                    
+                    El registro existente ha sido actualizado con nuevos datos.
+                `);
+            } else {
+                const datos = result.datos || {};
+                let mensaje = `✅ Documento procesado - Confianza: ${result.confianza}%\n\n`;
+                
+                if (datos.numero_factura) mensaje += `📄 Factura: ${datos.numero_factura}\n`;
+                if (datos.razon_social_emisor) mensaje += `🏢 Emisor: ${datos.razon_social_emisor}\n`;
+                if (datos.total) mensaje += `💰 Total: $${formatNumber(datos.total)}\n`;
+                
+                console.log(mensaje);
+                
+                if (result.confianza >= 70) {
+                    showAlert('success', `${result.message} - Estado: ${result.estado}`);
+                } else if (result.confianza >= 50) {
+                    showAlert('warning', `${result.message} - Revisar datos`);
+                } else {
+                    showAlert('error', `Confianza baja: ${result.confianza}%`);
+                }
+            }
+            
+            // Limpiar selección
+            selectedFile = null;
+            document.getElementById('file-selected').style.display = 'none';
+            document.getElementById('file-upload').value = '';
+            
+            // Recargar tabla
+            loadDocumentos();
+        } else {
+            showAlert('error', result.message);
+        }
+    } catch (error) {
+        showAlert('error', 'Error al subir el documento');
+        console.error(error);
+    }
+}
+
+// ============================================
+// FUNCIONES DE PREVIEW
+// ============================================
+
+async function verDetalleDocumento(id) {
+    try {
+        const response = await fetch(`${API_URL}/documentos/${id}/preview`);
+        const result = await response.json();
+        
+        if (!result.success) {
+            showAlert('error', result.message);
+            return;
+        }
+        
+        const doc = result.documento;
+        
+        // Mostrar PDF en iframe
+        document.getElementById('preview-iframe').src = result.file_path;
+        
+        // Construir panel de información
+        let html = '';
+        
+        // Sección: Información General
+        html += '<div class="preview-info-section">';
+        html += '<div class="preview-info-title">Información General</div>';
+        
+        if (doc.numero_factura) {
+            html += `
+                <div class="preview-info-item">
+                    <span class="preview-info-label">Número:</span>
+                    <span class="preview-info-value">${doc.numero_factura}</span>
+                </div>
+            `;
+        }
+        
+        if (doc.cufe) {
+            html += `
+                <div class="preview-info-item">
+                    <span class="preview-info-label">CUFE:</span>
+                    <span class="preview-info-value" style="font-size: 10px; word-break: break-all;">${doc.cufe}</span>
+                </div>
+            `;
+        }
+        
+        if (doc.fecha_emision) {
+            html += `
+                <div class="preview-info-item">
+                    <span class="preview-info-label">Fecha:</span>
+                    <span class="preview-info-value">${formatDate(doc.fecha_emision)}</span>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        
+        // Sección: Emisor
+        html += '<div class="preview-info-section">';
+        html += '<div class="preview-info-title">Emisor</div>';
+        
+        if (doc.razon_social_emisor) {
+            html += `
+                <div class="preview-info-item">
+                    <span class="preview-info-label">Razón Social:</span>
+                    <span class="preview-info-value">${doc.razon_social_emisor}</span>
+                </div>
+            `;
+        }
+        
+        if (doc.nit_emisor) {
+            html += `
+                <div class="preview-info-item">
+                    <span class="preview-info-label">NIT:</span>
+                    <span class="preview-info-value">${doc.nit_emisor}</span>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        
+        // Sección: Cliente
+        if (doc.nombre_adquiriente || doc.nit_adquiriente) {
+            html += '<div class="preview-info-section">';
+            html += '<div class="preview-info-title">Cliente</div>';
+            
+            if (doc.nombre_adquiriente) {
+                html += `
+                    <div class="preview-info-item">
+                        <span class="preview-info-label">Nombre:</span>
+                        <span class="preview-info-value">${doc.nombre_adquiriente}</span>
+                    </div>
+                `;
+            }
+            
+            if (doc.nit_adquiriente) {
+                html += `
+                    <div class="preview-info-item">
+                        <span class="preview-info-label">Documento:</span>
+                        <span class="preview-info-value">${doc.nit_adquiriente}</span>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+        }
+        
+        // Sección: Valores
+        html += '<div class="preview-info-section">';
+        html += '<div class="preview-info-title">Valores</div>';
+        
+        if (doc.total) {
+            html += `
+                <div class="preview-info-item">
+                    <span class="preview-info-label">Total:</span>
+                    <span class="preview-info-value" style="color: #27ae60; font-size: 18px;">$${formatNumber(doc.total)}</span>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        
+        // Sección: Estado y Confianza
+        html += '<div class="preview-info-section">';
+        html += '<div class="preview-info-title">Estado</div>';
+        
+        const estadoClass = `estado-${doc.estado}`;
+        html += `
+            <div class="preview-info-item">
+                <span class="preview-info-label">Estado actual:</span>
+                <span class="estado-badge ${estadoClass}">${doc.estado}</span>
+            </div>
+        `;
+        
+        const confianzaColor = doc.confianza >= 70 ? '#27ae60' : doc.confianza >= 50 ? '#f39c12' : '#e74c3c';
+        html += `
+            <div class="preview-info-item">
+                <span class="preview-info-label">Confianza:</span>
+                <span class="preview-info-value" style="color: ${confianzaColor};">${doc.confianza}%</span>
+            </div>
+        `;
+        
+        html += '</div>';
+        
+        // Botones de acción
+        html += '<div class="preview-actions">';
+        
+        if (doc.estado === 'pendiente' || doc.estado === 'correccion') {
+            html += `<button class="btn btn-primary" onclick="validarDocumento(${id})">✓ Validar</button>`;
+        }
+        
+        if (doc.estado === 'validado') {
+            html += `<button class="btn btn-success" onclick="radicarDocumento(${id})">📤 Radicar en DIAN</button>`;
+        }
+        
+        html += `<button class="btn btn-secondary" onclick="cambiarEstadoDocumento(${id})">🔄 Cambiar Estado</button>`;
+        html += '</div>';
+        
+        document.getElementById('preview-data').innerHTML = html;
+        
+        // Mostrar modal
+        document.getElementById('modal-preview').classList.add('active');
+        
+    } catch (error) {
+        showAlert('error', 'Error al cargar la previsualización');
+        console.error(error);
+    }
+}
+
+function closePreview() {
+    document.getElementById('modal-preview').classList.remove('active');
+    document.getElementById('preview-iframe').src = '';
+}
+
+// ============================================
+// FUNCIONES DE VALIDACIÓN Y ESTADO
+// ============================================
+
+async function validarDocumento(id) {
+    try {
+        const response = await fetch(`${API_URL}/documentos/${id}/validar`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.valido) {
+            showAlert('success', `✅ Documento validado (Score: ${result.score}%)`);
+        } else {
+            let mensaje = '❌ Errores de validación:\n\n';
+            result.errores.forEach(error => {
+                mensaje += `• ${error}\n`;
+            });
+            showAlert('error', mensaje);
+        }
+        
+        closePreview();
+        loadDocumentos();
+        
+    } catch (error) {
+        showAlert('error', 'Error al validar documento');
+        console.error(error);
+    }
+}
+
+async function radicarDocumento(id) {
+    if (!confirm('¿Está seguro de radicar este documento en la DIAN?')) {
+        return;
+    }
+    
+    try {
+        showAlert('info', 'Radicando en DIAN...');
+        
+        // TODO: Implementar cuando esté la integración DIAN
+        await fetch(`${API_URL}/documentos/${id}/estado`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                estado: 'radicado',
+                observaciones: 'Radicado manualmente'
+            })
+        });
+        
+        showAlert('success', 'Documento radicado exitosamente');
+        closePreview();
+        loadDocumentos();
+        
+    } catch (error) {
+        showAlert('error', 'Error al radicar documento');
+        console.error(error);
+    }
+}
+
+async function cambiarEstadoDocumento(id) {
+    const nuevoEstado = prompt('Nuevo estado (pendiente/validado/radicado/correccion/error):');
+    
+    if (!nuevoEstado) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/documentos/${id}/estado`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                estado: nuevoEstado.toLowerCase(),
+                observaciones: 'Cambio manual de estado'
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('success', 'Estado actualizado');
+            closePreview();
+            loadDocumentos();
+        } else {
+            showAlert('error', result.message);
+        }
+        
+    } catch (error) {
+        showAlert('error', 'Error al cambiar estado');
+        console.error(error);
+    }
+}
+
+// ============================================
+// FUNCIONES DEL SCHEDULER
+// ============================================
+
+async function runSchedulerJob(jobId) {
+    try {
+        showAlert('info', 'Ejecutando proceso de validación...');
+        
+        const response = await fetch(`${API_URL}/scheduler/run/${jobId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('success', 'Proceso ejecutado exitosamente');
+            setTimeout(() => loadDocumentos(), 2000);
+        } else {
+            showAlert('error', result.message);
+        }
+        
+    } catch (error) {
+        showAlert('error', 'Error al ejecutar proceso');
+        console.error(error);
+    }
 }
