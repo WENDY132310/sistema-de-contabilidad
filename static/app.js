@@ -660,6 +660,8 @@ async function loadDocumentos() {
                     <td>
                         <button class="btn btn-secondary" onclick="verDetalleDocumento(${d.id})" 
                             style="padding: 6px 12px; font-size: 12px;">👁️ Ver</button>
+                        <button class="btn btn-secondary" onclick="eliminarDocumento(${d.id})" 
+                            style="padding: 6px 12px; font-size: 12px; background: #e74c3c;">🗑️</button>
                     </td>
                 </tr>
             `;
@@ -740,6 +742,61 @@ async function uploadDocument(input) {
     }
     
     input.value = '';
+}
+
+async function eliminarDocumento(id) {
+    if (!confirm('¿Está seguro de eliminar este documento? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/documentos/${id}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('success', 'Documento eliminado exitosamente');
+            loadDocumentos();
+        } else {
+            showAlert('error', result.message);
+        }
+        
+    } catch (error) {
+        showAlert('error', 'Error al eliminar documento');
+        console.error(error);
+    }
+}
+
+async function eliminarTodosDocumentos() {
+    const confirmacion = prompt('⚠️ ADVERTENCIA: Esto eliminará TODOS los documentos.\n\nEscribe "ELIMINAR TODO" para confirmar:');
+    
+    if (confirmacion !== 'ELIMINAR TODO') {
+        showAlert('info', 'Operación cancelada');
+        return;
+    }
+    
+    try {
+        showAlert('info', 'Eliminando todos los documentos...');
+        
+        const response = await fetch(`${API_URL}/documentos/delete-all`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('success', result.message);
+            loadDocumentos();
+        } else {
+            showAlert('error', result.message);
+        }
+        
+    } catch (error) {
+        showAlert('error', 'Error al eliminar documentos');
+        console.error(error);
+    }
 }
 
 // Utilidades
@@ -1087,6 +1144,7 @@ async function verDetalleDocumento(id) {
         }
         
         html += `<button class="btn btn-secondary" onclick="cambiarEstadoDocumento(${id})">🔄 Cambiar Estado</button>`;
+        html += `<button class="btn btn-secondary" style="background: #e74c3c;" onclick="eliminarDocumento(${id}); closePreview();">🗑️ Eliminar</button>`;
         html += '</div>';
         
         document.getElementById('preview-data').innerHTML = html;

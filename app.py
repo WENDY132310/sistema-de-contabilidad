@@ -560,22 +560,32 @@ def upload_documento():
     if file.filename == '':
         return jsonify({'success': False, 'message': 'Nombre de archivo vacío'}), 400
     
-    # Guardar archivo
-    import hashlib
-    file_hash = hashlib.md5(file.read()).hexdigest()
-    file.seek(0)  # Reset para leer nuevamente
-    
-    filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{file_hash[:8]}_{file.filename}"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
-    
-    # Procesar PDF
-    datos_extraidos = {}
-    texto_extraido = ""
-    estado = 'pendiente'
-    confianza = 0
-    
     try:
+        # Guardar archivo temporalmente
+        temp_filename = f"temp_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename}"
+        temp_filepath = os.path.join(UPLOAD_FOLDER, temp_filename)
+        file.save(temp_filepath)
+        
+        # Calcular hash del archivo guardado
+        import hashlib
+        with open(temp_filepath, 'rb') as f:
+            file_hash = hashlib.md5(f.read()).hexdigest()
+        
+        # Nombre final con hash
+        filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{file_hash[:8]}_{file.filename}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Renombrar archivo temporal
+        if os.path.exists(filepath):
+            os.remove(filepath)  # Si ya existe, eliminarlo
+        os.rename(temp_filepath, filepath)
+        
+        # Procesar PDF
+        datos_extraidos = {}
+        texto_extraido = ""
+        estado = 'pendiente'
+        confianza = 0
+        
         if filename.lower().endswith('.pdf'):
             # Extraer texto del PDF
             with open(filepath, 'rb') as pdf_file:
@@ -584,18 +594,25 @@ def upload_documento():
                     texto_extraido += page.extract_text()
             
             # Procesar factura
-            datos_extraidos = procesar_factura(texto_extraido)
+            datos_extraidos = procesar_factura_completa(texto_extraido)
             confianza = datos_extraidos.get('confianza', 0)
             
             # Verificar duplicados ANTES de guardar
             detector = DuplicateDetector(DATABASE)
             duplicate_check = detector.check_duplicate(
                 cufe=datos_extraidos.get('cufe'),
-                numero_factura=datos_extraidos.get('numero_factura')
+                numero_factura=datos_extraidos.get('numero_factura'),
+                nit_emisor=datos_extraidos.get('nit_emisor'),
+                total=datos_extraidos.get('total'),
+                fecha_emision=datos_extraidos.get('fecha_emision'),
+                archivo=filepath
             )
+
             
-            if duplicate_check['is_duplicate']:
-                # Es duplicado - actualizar registro existente en lugar de crear nuevo
+            if duplicate_check['is_duplicate'] and duplicate_check['confidence'] >= 80:
+                # Es duplicado - eliminar archivo y actualizar registro existente
+                os.remove(filepath)
+                
                 detector.merge_duplicates(
                     duplicate_check['duplicate_id'],
                     datos_extraidos
@@ -617,56 +634,68 @@ def upload_documento():
                 estado = 'pendiente'
             else:
                 estado = 'error'
-            
+        
+        # Guardar en BD
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO documentos (
+                archivo, file_hash, tipo_documento, numero_factura, cufe,
+                nit_emisor, razon_social_emisor, nit_adquiriente, nombre_adquiriente,
+                fecha_emision, fecha_vencimiento, subtotal, iva, total, forma_pago,
+                confianza, estado, texto_extraido, datos_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            filename, file_hash,
+            datos_extraidos.get('tipo_documento', 'PDF'),
+            datos_extraidos.get('numero_factura'),
+            datos_extraidos.get('cufe'),
+            datos_extraidos.get('nit_emisor'),
+            datos_extraidos.get('razon_social_emisor'),
+            datos_extraidos.get('nit_adquiriente'),
+            datos_extraidos.get('nombre_adquiriente'),
+            datos_extraidos.get('fecha_emision'),
+            datos_extraidos.get('fecha_vencimiento'),
+            datos_extraidos.get('subtotal', 0),
+            datos_extraidos.get('iva', 0),
+            datos_extraidos.get('total', 0),
+            datos_extraidos.get('forma_pago'),
+            confianza,
+            estado,
+            texto_extraido[:5000],
+            json.dumps(datos_extraidos, ensure_ascii=False)
+        ))
+        
+        documento_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'id': documento_id,
+            'estado': estado,
+            'confianza': confianza,
+            'is_duplicate': False,
+            'datos': datos_extraidos,
+            'message': f'Documento procesado con {confianza}% de confianza'
+        })
+        
     except Exception as e:
-        texto_extraido = f"Error en procesamiento: {str(e)}"
-        estado = 'error'
-        print(f"Error: {str(e)}")
-    
-    # Guardar en BD
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO documentos (
-            archivo, file_hash, tipo_documento, numero_factura, cufe,
-            nit_emisor, razon_social_emisor, nit_adquiriente, nombre_adquiriente,
-            fecha_emision, fecha_vencimiento, subtotal, iva, total, forma_pago,
-            confianza, estado, texto_extraido, datos_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        filename, file_hash,
-        datos_extraidos.get('tipo_documento', 'PDF'),
-        datos_extraidos.get('numero_factura'),
-        datos_extraidos.get('cufe'),
-        datos_extraidos.get('nit_emisor'),
-        datos_extraidos.get('razon_social_emisor'),
-        datos_extraidos.get('nit_adquiriente'),
-        datos_extraidos.get('nombre_adquiriente'),
-        datos_extraidos.get('fecha_emision'),
-        datos_extraidos.get('fecha_vencimiento'),
-        datos_extraidos.get('subtotal', 0),
-        datos_extraidos.get('iva', 0),
-        datos_extraidos.get('total', 0),
-        datos_extraidos.get('forma_pago'),
-        confianza,
-        estado,
-        texto_extraido[:5000],
-        json.dumps(datos_extraidos, ensure_ascii=False)
-    ))
-    
-    documento_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
-    return jsonify({
-        'success': True,
-        'id': documento_id,
-        'estado': estado,
-        'confianza': confianza,
-        'is_duplicate': False,
-        'datos': datos_extraidos,
-        'message': f'Documento procesado con {confianza}% de confianza'
-    })
+        # Si hay error, eliminar archivo si existe
+        if 'filepath' in locals() and os.path.exists(filepath):
+            os.remove(filepath)
+        if 'temp_filepath' in locals() and os.path.exists(temp_filepath):
+            os.remove(temp_filepath)
+        
+        print(f"Error procesando documento: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'message': f'Error al procesar documento: {str(e)}'
+        }), 500
+
 
 @app.route('/api/documentos/<int:documento_id>/validar', methods=['POST'])
 def validar_documento(documento_id):
@@ -758,14 +787,90 @@ def preview_documento(documento_id):
         'file_path': f"/uploads/{doc['archivo']}"
     })
 
+@app.route('/api/documentos/<int:documento_id>', methods=['DELETE'])
+def delete_documento(documento_id):
+    """Elimina un documento de la base de datos y del sistema de archivos"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Obtener información del documento
+        cursor.execute("SELECT archivo FROM documentos WHERE id = ?", (documento_id,))
+        doc = cursor.fetchone()
+        
+        if not doc:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Documento no encontrado'}), 404
+        
+        # Eliminar archivo físico
+        archivo_path = os.path.join(UPLOAD_FOLDER, doc['archivo'])
+        if os.path.exists(archivo_path):
+            os.remove(archivo_path)
+        
+        # Eliminar de la base de datos
+        cursor.execute("DELETE FROM documentos WHERE id = ?", (documento_id,))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Documento eliminado exitosamente'
+        })
+        
+    except Exception as e:
+        print(f"Error eliminando documento: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error al eliminar documento: {str(e)}'
+        }), 500
 
+
+@app.route('/api/documentos/delete-all', methods=['POST'])
+def delete_all_documentos():
+    """Elimina TODOS los documentos (usar con precaución)"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Obtener todos los archivos
+        cursor.execute("SELECT archivo FROM documentos")
+        docs = cursor.fetchall()
+        
+        # Eliminar archivos físicos
+        deleted_files = 0
+        for doc in docs:
+            archivo_path = os.path.join(UPLOAD_FOLDER, doc['archivo'])
+            if os.path.exists(archivo_path):
+                os.remove(archivo_path)
+                deleted_files += 1
+        
+        # Eliminar todos los registros de la BD
+        cursor.execute("DELETE FROM documentos")
+        deleted_records = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Eliminados {deleted_records} registros y {deleted_files} archivos'
+        })
+        
+    except Exception as e:
+        print(f"Error eliminando todos los documentos: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+        
 @app.route('/uploads/<filename>')
 def serve_upload(filename):
     """Sirve archivos subidos"""
     return send_file(os.path.join(UPLOAD_FOLDER, filename))
 
 
-def procesar_factura(texto):
+def procesar_factura_completa(texto):
     """Procesa el texto extraído de una factura"""
     datos = {
         'numero_factura': None,
