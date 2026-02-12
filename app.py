@@ -176,9 +176,9 @@ def init_db():
     conn.close()
 try:
     init_scheduler(DATABASE)
-    print("✅ Scheduler inicializado - Tareas automáticas activadas")
+    print("Scheduler inicializado - Tareas automaticas activadas")
 except Exception as e:
-    print(f"⚠️ Error inicializando scheduler: {e}")
+    print(f"Error inicializando scheduler: {e}")
 
 # Detener scheduler al cerrar
 def shutdown_scheduler():
@@ -186,7 +186,7 @@ def shutdown_scheduler():
         scheduler = get_scheduler()
         if scheduler:
             scheduler.stop()
-            print("✅ Scheduler detenido")
+            print("Scheduler detenido")
     except:
         pass
 
@@ -871,7 +871,7 @@ def serve_upload(filename):
 
 
 def procesar_factura_completa(texto):
-    """Procesa el texto extraído de una factura"""
+    """Procesa el texto extraído de una factura con muchos más patrones"""
     datos = {
         'numero_factura': None,
         'cufe': None,
@@ -886,15 +886,41 @@ def procesar_factura_completa(texto):
         'total': 0,
         'forma_pago': None,
         'tipo_documento': 'Factura Electrónica',
-        'confianza': 0
+        'confianza': 0,
+        'moneda': 'COP',
+        'email_emisor': None,
+        'direccion_emisor': None,
+        'telefono_emisor': None,
+        'pais_emisor': None
     }
     
-    # Número de factura
+    texto_limpio = texto.replace('\n', ' ').replace('\r', ' ')
+    
+    # ============ NÚMERO DE FACTURA - MUCHOS MÁS PATRONES ============
     patterns_factura = [
-        r'Número de Factura:\s*([A-Z0-9-]+)',
-        r'FACTURA[^:]*:\s*([A-Z0-9-]+)',
+        # Facturas Colombia
         r'PREFIJO\s*([A-Z]+)\s*CONSECUTIVO\s*(\d+)',
-        r'CAT[\s-]?(\d+)'
+        r'FACTURA\s*ELECTR[ÓO]NICA[^0-9]*(\d+)',
+        r'N[ÚU]MERO\s*DE\s*FACTURA[^0-9]*([A-Z0-9\-]+)',
+        r'N[ÚU]MERO\s*FACTURA[^0-9]*([A-Z0-9\-]+)',
+        r'Número\s*de\s*Factura[^0-9]*([A-Z0-9\-]+)',
+        r'Factura\s*N[ÚU]MERO[^0-9]*([A-Z0-9\-]+)',
+        
+        # Facturas internacionales
+        r'Invoice\s*#\s*([A-Z0-9\-\.]+)',
+        r'Invoice\s*Number[^0-9]*([A-Z0-9\-\.]+)',
+        r'INVOICE\s*#\s*([A-Z0-9\-\.]+)',
+        r'Invoice\s*No\.?\s*([A-Z0-9\-\.]+)',
+        r'Folio\s*#?\s*([A-Z0-9\-\.]+)',
+        r'Factura\s*fiscal[^0-9]*([A-Z0-9\-\.]+)',
+        
+        # Facturas genéricas
+        r'(?:FACTURA|INVOICE|FACT)[^0-9]*#?\s*([A-Z0-9\-\.]+)',
+        r'N[ÚU]\.?\s*([A-Z0-9\-\.]+)\s*(?:factura|invoice)',
+        r'#\s*([A-Z0-9\-]+)',
+        
+        # Para detectar al final si nada funcionó
+        r'(?:FACT|INV|FCT)\s*([A-Z0-9]{4,})'
     ]
     
     for pattern in patterns_factura:
@@ -903,119 +929,319 @@ def procesar_factura_completa(texto):
             if len(match.groups()) == 2:
                 datos['numero_factura'] = f"{match.group(1)}-{match.group(2)}"
             else:
-                datos['numero_factura'] = match.group(1)
-            break
+                val = match.group(1).strip()
+                if len(val) >= 3:  # Debe tener al menos 3 caracteres
+                    datos['numero_factura'] = val
+            if datos['numero_factura']:
+                break
     
-    # CUFE
-    match = re.search(r'CUFE[:\s]*([a-f0-9]{64,})', texto, re.IGNORECASE)
-    if match:
-        datos['cufe'] = match.group(1)
-    
-    # Fecha de emisión
-    patterns_fecha = [
-        r'Fecha de Emisión:\s*(\d{2}/\d{2}/\d{4})',
-        r'FECHA FACTURA\s*(\d{4}-\d{2}-\d{2})',
-        r'(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}'
+    # ============ CUFE / CUNE / FOLIO FISCAL ============
+    cufe_patterns = [
+        r'CUFE[^a-f0-9]*([a-f0-9]{64,})',
+        r'CUDE[^a-f0-9]*([a-f0-9]{64,})',
+        r'Folio\s*Fiscal[^a-f0-9]*([a-f0-9]{64,})',
+        r'UUID[^a-f0-9]*([a-f0-9]{32,})',
+        r'(?:CUFE|CUDE)[:\s]*([a-f0-9]{40,})'
     ]
     
-    for pattern in patterns_fecha:
-        match = re.search(pattern, texto)
+    for pattern in cufe_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
+        if match:
+            datos['cufe'] = match.group(1)
+            break
+    
+    # ============ FECHAS - MUCHOS FORMATOS ============
+    fecha_patterns = [
+        # Formato Colombia
+        r'Fecha\s*de\s*Emisi[ÓO]n[^0-9]*(\d{2}/\d{2}/\d{4})',
+        r'FECHA\s*EMISI[ÓO]N[^0-9]*(\d{2}/\d{2}/\d{4})',
+        r'Fecha\s*Emisi[ÓO]n[^0-9]*(\d{2}-\d{2}-\d{4})',
+        r'Fecha\s*Factura[^0-9]*(\d{2}/\d{2}/\d{4})',
+        
+        # Formato internacional
+        r'Invoice\s*Date[^0-9]*(\d{2}/\d{2}/\d{4})',
+        r'Invoice\s*Date[^0-9]*(\d{4}-\d{2}-\d{2})',
+        r'Date[^0-9]*(\d{2}/\d{2}/\d{4})',
+        r'(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}',
+        
+        # Otros formatos
+        r'Fecha[^0-9]*(\d{2}\s+de\s+\w+\s+de\s+\d{4})',
+        r'(\d{1,2}\s+[\w]+\s+\d{4})'
+    ]
+    
+    for pattern in fecha_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
         if match:
             fecha_str = match.group(1)
             try:
                 if '/' in fecha_str:
                     datos['fecha_emision'] = datetime.strptime(fecha_str, '%d/%m/%Y').strftime('%Y-%m-%d')
-                else:
+                elif '-' in fecha_str and len(fecha_str) == 10:
                     datos['fecha_emision'] = fecha_str[:10]
+                elif 'de' in fecha_str:
+                    # Fecha en formato español
+                    meses = {'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
+                            'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
+                            'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'}
+                    for mes, num in meses.items():
+                        if mes in fecha_str.lower():
+                            partes = fecha_str.split()
+                            if len(partes) >= 3:
+                                dia = partes[0]
+                                año = partes[-1]
+                                datos['fecha_emision'] = f"{año}-{num}-{int(dia):02d}"
+                            break
             except:
                 pass
-            break
+            if datos['fecha_emision']:
+                break
     
-    # NIT emisor
-    patterns_nit = [
-        r'Nit del Emisor:\s*(\d+)',
-        r'Nit\s+(\d{9,})-?(\d)?'
+    # ============ NIT / TAX ID - MUCHOS FORMATOS ============
+    nit_patterns = [
+        # Colombia
+        r'Nit\s*(?:del\s*)?Emisor[^0-9]*(\d{1,3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d?)',
+        r'NIT[^0-9]*(\d{9,11}[-\s]?\d?)',
+        r'Nit\s*(\d{9,10})',
+        r'NIT:\s*(\d+)',
+        
+        # Internacional
+        r'Tax\s*ID[^0-9]*([A-Z0-9\-]+)',
+        r'Tax\s*ID/EIN[^0-9]*([0-9]{2}-[0-9]{7})',
+        r'RFC[^0-9]*([A-Z]{3,4}[0-9]{6}[A-Z0-9]{3})',
+        r'VAT[^0-9]*([A-Z0-9]+)',
+        r'EIN[^0-9]*([0-9]{2}-[0-9]{7})',
+        
+        # Genéricos
+        r'Identification\s*Number[^0-9]*([A-Z0-9\-\.]+)',
+        r'(?:NIT|RFC|TAX|ID)[:\s]*([A-Z0-9\-\.]+)'
     ]
     
-    for pattern in patterns_nit:
-        match = re.search(pattern, texto)
+    for pattern in nit_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
         if match:
-            if len(match.groups()) == 2 and match.group(2):
-                datos['nit_emisor'] = f"{match.group(1)}-{match.group(2)}"
-            else:
-                datos['nit_emisor'] = match.group(1)
-            break
+            nit = match.group(1).replace('.', '').replace(' ', '').replace('-', '').strip()
+            if len(nit) >= 8:
+                # Formatear NIT
+                if len(nit) == 9:
+                    datos['nit_emisor'] = f"{nit[:3]}.{nit[3:6]}.{nit[6:]}"
+                elif len(nit) == 10:
+                    datos['nit_emisor'] = f"{nit[:3]}.{nit[3:6]}.{nit[6:9]}-{nit[9]}"
+                else:
+                    datos['nit_emisor'] = nit
+                break
     
-    # Razón Social emisor
-    match = re.search(r'Razón Social:\s*([A-ZÁÉÍÓÚÑ\s]+)', texto, re.IGNORECASE)
-    if match:
-        datos['razon_social_emisor'] = match.group(1).strip()[:100]
-    else:
-        match = re.search(r'CORPORACION\s+[A-ZÁÉÍÓÚÑ\s]+', texto, re.IGNORECASE)
-        if match:
-            datos['razon_social_emisor'] = match.group(0).strip()[:100]
-    
-    # Cliente
-    match = re.search(r'Nombre o Razón Social:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s\.]+)', texto)
-    if match:
-        datos['nombre_adquiriente'] = match.group(1).strip()
-    
-    # Documento cliente
-    patterns_doc = [
-        r'Número Documento:\s*(\d+)',
-        r'C\.C\.\s*(\d+)'
+    # ============ RAZÓN SOCIAL EMISOR ============
+    rs_patterns = [
+        # Colombia
+        r'Raz[ÓO]n\s*Social[^:]*:\s*([A-ZÁÉÍÓÚÑ\s&\.\-]+?)(?:\n|NIT| Ciudad)',
+        r'Empresa[^:]*:\s*([A-ZÁÉÍÓÚÑ\s&\.\-]+)',
+        r'EMISOR[^:]*:\s*([A-ZÁÉÍÓÚÑ\s&\.\-]+)',
+        
+        # Internacional
+        r'(?:From|Bill\s*From)[^:]*:\s*([A-Z][A-Za-z\s&\.\-]+?)(?:\n|#|Account)',
+        r'(?:Seller|Provider|Company)[^:]*:\s*([A-Z][A-Za-z\s&\.\-]+)',
+        r'Business\s*Name[^:]*:\s*([A-Z][A-Za-z\s&\.\-]+)',
+        
+        # Genérico - buscar al inicio
+        r'^([A-Z][A-Z\s&\.\-]{5,30})\s*(?:NIT|Tax|ID|RFC)'
     ]
     
-    for pattern in patterns_doc:
-        match = re.search(pattern, texto)
+    for pattern in rs_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE | re.MULTILINE)
+        if match:
+            val = match.group(1).strip()
+            if len(val) >= 5:
+                datos['razon_social_emisor'] = val[:100]
+                break
+    
+    # Si no encontró razón social, buscar nombres de empresas conocidas
+    if not datos['razon_social_emisor']:
+        empresas = ['MICROSOFT', 'GOOGLE', 'AMAZON', 'FACEBOOK', 'APPLE', 'NETFLIX', 
+                   'CANVA', 'LINKEDIN', 'BITLY', 'AIRBNB', 'UBER', 'DROPBOX',
+                   'ZOOM', 'SLACK', 'ATLASSIAN', 'SALESFORCE', 'ORACLE']
+        for emp in empresas:
+            if emp in texto.upper():
+                datos['razon_social_emisor'] = emp
+                break
+    
+    # ============ CLIENTE / ADQUIRIENTE ============
+    cliente_patterns = [
+        r'(?:To|Bill\s*To|Cliente|Client)[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ\s&\.\-]+?)(?:\n|NIT|Tax|ID|Dirección)',
+        r'Nombre\s*(?:del\s*)?Cliente[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ\s\.\-]+)',
+        r'(?:Customer|Beneficiario)[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ\s\.\-]+)'
+    ]
+    
+    for pattern in cliente_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
+        if match:
+            val = match.group(1).strip()
+            if len(val) >= 3:
+                datos['nombre_adquiriente'] = val[:80]
+                break
+    
+    # ============ DOCUMENTO CLIENTE ============
+    doc_patterns = [
+        r'(?:Documento|N[ÚU]mero)[^:]*:\s*(\d{6,12})',
+        r'C\.C\.?\s*(\d{8,10})',
+        r'NIT[^:]*:\s*(\d{9,10})'
+    ]
+    
+    for pattern in doc_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
         if match:
             datos['nit_adquiriente'] = match.group(1)
             break
     
-    # Totales
-    match = re.search(r'Subtotal[\s:]*\$?\s*([\d,]+\.?\d*)', texto, re.IGNORECASE)
-    if match:
-        try:
-            datos['subtotal'] = float(match.group(1).replace(',', ''))
-        except:
-            pass
-    
-    match = re.search(r'IVA[\s:]*\$?\s*([\d,]+\.?\d*)', texto, re.IGNORECASE)
-    if match:
-        try:
-            datos['iva'] = float(match.group(1).replace(',', ''))
-        except:
-            pass
-    
-    patterns_total = [
-        r'Total factura[^$]*\$?\s*([\d,]+\.?\d*)',
-        r'Total neto factura[^$]*\$?\s*([\d,]+\.?\d*)',
-        r'TOTAL[^$]*\$?\s*([\d,]+\.?\d*)'
+    # ============ EMAIL ============
+    email_patterns = [
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        r'Email[^:]*:\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
     ]
     
-    for pattern in patterns_total:
+    for pattern in email_patterns:
         match = re.search(pattern, texto, re.IGNORECASE)
         if match:
-            try:
-                datos['total'] = float(match.group(1).replace(',', ''))
+            datos['email_emisor'] = match.group(0).lower() if match else None
+            break
+    
+    # ============ TELÉFONO ============
+    tel_patterns = [
+        r'Tel[eé]fono[^0-9]*(\+?[\d\s\-\(\)]{7,20})',
+        r'Phone[^0-9]*(\+?[\d\s\-\(\)]{7,20})',
+        r'(\+?\d{1,3}[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4})',
+        r'(\d{3}[\s\-]\d{3}[\s\-]\d{4})'
+    ]
+    
+    for pattern in tel_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
+        if match:
+            tel = re.sub(r'[^\d\+]', '', match.group(1))
+            if len(tel) >= 7:
+                datos['telefono_emisor'] = tel
                 break
+    
+    # ============ DIRECCIÓN ============
+    dir_patterns = [
+        r'Direcci[ÓO]n[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ0-9\s\,\.\#\-]+)',
+        r'Address[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ0-9\s\,\.\#\-]+)',
+        r'(?:Calle|Carrera|Avenida|Av)\.?\s*([A-Z0-9\s\,\.\#\-]+)'
+    ]
+    
+    for pattern in dir_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
+        if match:
+            val = match.group(1).strip()
+            if len(val) >= 10:
+                datos['direccion_emisor'] = val[:150]
+                break
+    
+    # ============ PAÍS ============
+        pais_patterns = [
+            r'Pa[í]s[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ\s]+)',
+            r'Country[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ\s]+)',
+            r'(Colombia|México|Perú|Chile|Argentina|Brasil|Ecuador|Venezuela|España|United\s+States)'
+        ]
+
+        for pattern in pais_patterns:
+            match = re.search(pattern, texto, re.IGNORECASE)
+            if match:
+                try:
+                    pais = match.group(1).strip()
+                except IndexError:
+                    pais = match.group(0).strip()
+
+            # Normalizar
+            if 'colomb' in pais.lower(): datos['pais_emisor'] = 'Colombia'
+            elif 'méxic' in pais.lower() or 'mexic' in pais.lower(): datos['pais_emisor'] = 'México'
+            elif 'per' in pais.lower(): datos['pais_emisor'] = 'Perú'
+            elif 'argentin' in pais.lower(): datos['pais_emisor'] = 'Argentina'
+            elif 'chile' in pais.lower(): datos['pais_emisor'] = 'Chile'
+            elif 'brasil' in pais.lower(): datos['pais_emisor'] = 'Brasil'
+            elif 'españ' in pais.lower() or 'spain' in pais.lower(): datos['pais_emisor'] = 'España'
+            elif 'united' in pais.lower() or 'states' in pais.lower() or 'usa' in pais.lower(): datos['pais_emisor'] = 'Estados Unidos'
+            else: datos['pais_emisor'] = pais[:30]
+            break
+    
+    # ============ MONEDA ============
+    if 'USD' in texto or 'US$' in texto or 'dólar' in texto.lower() or 'dollar' in texto.lower():
+        datos['moneda'] = 'USD'
+    elif 'EUR' in texto or '€' in texto or 'euro' in texto.lower():
+        datos['moneda'] = 'EUR'
+    elif 'MXN' in texto or 'pesos mexicanos' in texto.lower():
+        datos['moneda'] = 'MXN'
+    elif 'PEN' in texto or 'soles' in texto.lower():
+        datos['moneda'] = 'PEN'
+    else:
+        datos['moneda'] = 'COP'
+    
+    # ============ TOTALES ============
+    # Buscar el valor más grande que parezca un total
+    totales_encontrados = []
+    
+    # Patrones de total
+    total_patterns = [
+        r'Total\s*(?:a\s*pagar|neto|fACTURA)?[^$]*\$?\s*([\d,]+\.?\d*)',
+        r'Grand\s*Total[^$]*\$?\s*([\d,]+\.?\d*)',
+        r'Total\s*Due[^$]*\$?\s*([\d,]+\.?\d*)',
+        r'Amount\s*Due[^$]*\$?\s*([\d,]+\.?\d*)',
+        r'Importe\s*Total[^$]*\$?\s*([\d,]+\.?\d*)',
+        r'Valor\s*Total[^$]*\$?\s*([\d,]+\.?\d*)',
+        r'TOTAL[^$]*\$?\s*([\d,]+\.?\d*)',
+        r'\$\s*([\d,]+\.?\d*)',
+        r'([\d,]+\.?\d*)\s*(?:COP|USD|EUR|MXN)'
+    ]
+    
+    for pattern in total_patterns:
+        matches = re.findall(pattern, texto, re.IGNORECASE)
+        for match in matches:
+            try:
+                valor = float(match.replace(',', ''))
+                if valor > 0:
+                    totales_encontrados.append(valor)
             except:
                 pass
     
-    # Forma de pago
-    match = re.search(r'Forma de pago:\s*(\w+)', texto, re.IGNORECASE)
-    if match:
-        datos['forma_pago'] = match.group(1).capitalize()
+    if totales_encontrados:
+        # Tomar el mayor valor encontrado como el total
+        datos['total'] = max(totales_encontrados)
+        # Estimar IVA y subtotal
+        datos['iva'] = round(datos['total'] * 0.19, 2)
+        datos['subtotal'] = round(datos['total'] / 1.19, 2)
     
-    # Calcular confianza
+    # ============ FORMA DE PAGO ============
+    pago_patterns = [
+        r'Forma\s*de\s*pago[^:]*:\s*([A-Za-z\s]+)',
+        r'Payment\s*Method[^:]*:\s*([A-Za-z\s]+)',
+        r'Payment\s*Terms[^:]*:\s*([A-Za-z\s]+)',
+        r'(?:Transferencia|Consignación|Efectivo|Tarjeta|Cheque)\s*(?:bancaria)?'
+    ]
+    
+    for pattern in pago_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
+        if match:
+            datos['forma_pago'] = match.group(1).strip()[:30]
+            break
+    
+    # ============ CALCULAR CONFIANZA ============
     score = 0
-    if datos['numero_factura']: score += 20
-    if datos['cufe']: score += 15
-    if datos['nit_emisor']: score += 15
-    if datos['razon_social_emisor']: score += 10
-    if datos['total'] > 0: score += 20
-    if datos['fecha_emision']: score += 10
-    if datos['nombre_adquiriente']: score += 10
+    if datos['numero_factura'] and len(str(datos['numero_factura'])) >= 3:
+        score += 20
+    if datos['cufe']:
+        score += 20
+    if datos['nit_emisor'] and len(str(datos['nit_emisor'])) >= 8:
+        score += 15
+    if datos['razon_social_emisor']:
+        score += 15
+    if datos['total'] > 0:
+        score += 15
+    if datos['fecha_emision']:
+        score += 10
+    if datos['nombre_adquiriente']:
+        score += 10
+    if datos['email_emisor']:
+        score += 5
+    if datos['pais_emisor']:
+        score += 5
     
     datos['confianza'] = min(score, 100)
     

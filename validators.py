@@ -175,7 +175,11 @@ class DuplicateDetector:
         
         # Obtener datos existentes
         cursor.execute("SELECT * FROM documentos WHERE id = ?", (existing_id,))
-        existing = dict(cursor.fetchone())
+        row = cursor.fetchone()
+        if not row:
+            return
+        columns = [desc[0] for desc in cursor.description]
+        existing = dict(zip(columns, row))
         
         # Lista de campos a actualizar si están vacíos
         campos_actualizables = [
