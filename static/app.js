@@ -1009,126 +1009,154 @@ async function verDetalleDocumento(id) {
         // Mostrar PDF en iframe
         document.getElementById('preview-iframe').src = result.file_path;
         
-        // Construir panel de información
+        // Construir panel de información - TODOS LOS DATOS
         let html = '';
         
         // Sección: Información General
         html += '<div class="preview-info-section">';
-        html += '<div class="preview-info-title">Información General</div>';
+        html += '<div class="preview-info-title">Informacion General</div>';
         
         if (doc.numero_factura) {
-            html += `
-                <div class="preview-info-item">
-                    <span class="preview-info-label">Número:</span>
-                    <span class="preview-info-value">${doc.numero_factura}</span>
-                </div>
-            `;
+            html += `<div class="preview-info-item"><span class="preview-info-label">Numero Factura:</span><span class="preview-info-value">${doc.numero_factura}</span></div>`;
         }
         
         if (doc.cufe) {
-            html += `
-                <div class="preview-info-item">
-                    <span class="preview-info-label">CUFE:</span>
-                    <span class="preview-info-value" style="font-size: 10px; word-break: break-all;">${doc.cufe}</span>
-                </div>
-            `;
+            html += `<div class="preview-info-item"><span class="preview-info-label">CUFE:</span><span class="preview-info-value" style="font-size: 10px; word-break: break-all;">${doc.cufe}</span></div>`;
         }
         
         if (doc.fecha_emision) {
-            html += `
-                <div class="preview-info-item">
-                    <span class="preview-info-label">Fecha:</span>
-                    <span class="preview-info-value">${formatDate(doc.fecha_emision)}</span>
-                </div>
-            `;
+            html += `<div class="preview-info-item"><span class="preview-info-label">Fecha Emision:</span><span class="preview-info-value">${formatDate(doc.fecha_emision)}</span></div>`;
+        }
+        
+        if (doc.fecha_vencimiento) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Fecha Vencimiento:</span><span class="preview-info-value">${formatDate(doc.fecha_vencimiento)}</span></div>`;
+        }
+        
+        if (doc.moneda) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Moneda:</span><span class="preview-info-value">${doc.moneda}</span></div>`;
+        }
+        
+        if (doc.forma_pago) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Forma de Pago:</span><span class="preview-info-value">${doc.forma_pago}</span></div>`;
+        }
+        
+        if (doc.tipo_documento) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Tipo Documento:</span><span class="preview-info-value">${doc.tipo_documento}</span></div>`;
         }
         
         html += '</div>';
         
         // Sección: Emisor
         html += '<div class="preview-info-section">';
-        html += '<div class="preview-info-title">Emisor</div>';
+        html += '<div class="preview-info-title">Datos del Emisor</div>';
         
         if (doc.razon_social_emisor) {
-            html += `
-                <div class="preview-info-item">
-                    <span class="preview-info-label">Razón Social:</span>
-                    <span class="preview-info-value">${doc.razon_social_emisor}</span>
-                </div>
-            `;
+            html += `<div class="preview-info-item"><span class="preview-info-label">Razon Social:</span><span class="preview-info-value">${doc.razon_social_emisor}</span></div>`;
         }
         
         if (doc.nit_emisor) {
-            html += `
-                <div class="preview-info-item">
-                    <span class="preview-info-label">NIT:</span>
-                    <span class="preview-info-value">${doc.nit_emisor}</span>
-                </div>
-            `;
+            html += `<div class="preview-info-item"><span class="preview-info-label">NIT:</span><span class="preview-info-value">${doc.nit_emisor}</span></div>`;
+        }
+        
+        if (doc.email_emisor) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Email:</span><span class="preview-info-value">${doc.email_emisor}</span></div>`;
+        }
+        
+        if (doc.telefono_emisor) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Telefono:</span><span class="preview-info-value">${doc.telefono_emisor}</span></div>`;
+        }
+        
+        if (doc.direccion_emisor) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Direccion:</span><span class="preview-info-value">${doc.direccion_emisor}</span></div>`;
+        }
+        
+        if (doc.ciudad_emisor) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Ciudad:</span><span class="preview-info-value">${doc.ciudad_emisor}</span></div>`;
+        }
+        
+        if (doc.departamento_emisor) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Departamento:</span><span class="preview-info-value">${doc.departamento_emisor}</span></div>`;
+        }
+        
+        if (doc.pais_emisor) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Pais:</span><span class="preview-info-value">${doc.pais_emisor}</span></div>`;
+        }
+        
+        if (doc.regimen_fiscal) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Regimen Fiscal:</span><span class="preview-info-value">${doc.regimen_fiscal}</span></div>`;
         }
         
         html += '</div>';
         
-        // Sección: Cliente
-        if (doc.nombre_adquiriente || doc.nit_adquiriente) {
-            html += '<div class="preview-info-section">';
-            html += '<div class="preview-info-title">Cliente</div>';
-            
-            if (doc.nombre_adquiriente) {
-                html += `
-                    <div class="preview-info-item">
-                        <span class="preview-info-label">Nombre:</span>
-                        <span class="preview-info-value">${doc.nombre_adquiriente}</span>
-                    </div>
-                `;
-            }
-            
-            if (doc.nit_adquiriente) {
-                html += `
-                    <div class="preview-info-item">
-                        <span class="preview-info-label">Documento:</span>
-                        <span class="preview-info-value">${doc.nit_adquiriente}</span>
-                    </div>
-                `;
-            }
-            
-            html += '</div>';
+        // Sección: Cliente/Adquiriente
+        html += '<div class="preview-info-section">';
+        html += '<div class="preview-info-title">Datos del Cliente</div>';
+        
+        if (doc.nombre_adquiriente) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Nombre:</span><span class="preview-info-value">${doc.nombre_adquiriente}</span></div>`;
         }
+        
+        if (doc.razon_social_adquiriente) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Razon Social:</span><span class="preview-info-value">${doc.razon_social_adquiriente}</span></div>`;
+        }
+        
+        if (doc.nit_adquiriente) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Documento/NIT:</span><span class="preview-info-value">${doc.nit_adquiriente}</span></div>`;
+        }
+        
+        if (doc.email_adquiriente) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Email:</span><span class="preview-info-value">${doc.email_adquiriente}</span></div>`;
+        }
+        
+        if (doc.telefono_adquiriente) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Telefono:</span><span class="preview-info-value">${doc.telefono_adquiriente}</span></div>`;
+        }
+        
+        if (doc.direccion_adquiriente) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Direccion:</span><span class="preview-info-value">${doc.direccion_adquiriente}</span></div>`;
+        }
+        
+        if (doc.ciudad_adquiriente) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Ciudad:</span><span class="preview-info-value">${doc.ciudad_adquiriente}</span></div>`;
+        }
+        
+        html += '</div>';
         
         // Sección: Valores
         html += '<div class="preview-info-section">';
         html += '<div class="preview-info-title">Valores</div>';
         
+        if (doc.subtotal) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Subtotal:</span><span class="preview-info-value">$${formatNumber(doc.subtotal)}</span></div>`;
+        }
+        
+        if (doc.descuento) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Descuento:</span><span class="preview-info-value">$${formatNumber(doc.descuento)}</span></div>`;
+        }
+        
+        if (doc.iva) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">IVA:</span><span class="preview-info-value">$${formatNumber(doc.iva)}</span></div>`;
+        }
+        
         if (doc.total) {
-            html += `
-                <div class="preview-info-item">
-                    <span class="preview-info-label">Total:</span>
-                    <span class="preview-info-value" style="color: #27ae60; font-size: 18px;">$${formatNumber(doc.total)}</span>
-                </div>
-            `;
+            html += `<div class="preview-info-item"><span class="preview-info-label" style="font-weight: bold; font-size: 16px;">TOTAL:</span><span class="preview-info-value" style="color: #27ae60; font-size: 20px; font-weight: bold;">$${formatNumber(doc.total)}</span></div>`;
         }
         
         html += '</div>';
         
         // Sección: Estado y Confianza
         html += '<div class="preview-info-section">';
-        html += '<div class="preview-info-title">Estado</div>';
+        html += '<div class="preview-info-title">Estado del Documento</div>';
         
         const estadoClass = `estado-${doc.estado}`;
-        html += `
-            <div class="preview-info-item">
-                <span class="preview-info-label">Estado actual:</span>
-                <span class="estado-badge ${estadoClass}">${doc.estado}</span>
-            </div>
-        `;
+        html += `<div class="preview-info-item"><span class="preview-info-label">Estado:</span><span class="estado-badge ${estadoClass}">${doc.estado}</span></div>`;
         
         const confianzaColor = doc.confianza >= 70 ? '#27ae60' : doc.confianza >= 50 ? '#f39c12' : '#e74c3c';
-        html += `
-            <div class="preview-info-item">
-                <span class="preview-info-label">Confianza:</span>
-                <span class="preview-info-value" style="color: ${confianzaColor};">${doc.confianza}%</span>
-            </div>
-        `;
+        html += `<div class="preview-info-item"><span class="preview-info-label">Confianza:</span><span class="preview-info-value" style="color: ${confianzaColor}; font-weight: bold;">${doc.confianza}%</span></div>`;
+        
+        if (doc.observaciones) {
+            html += `<div class="preview-info-item"><span class="preview-info-label">Observaciones:</span><span class="preview-info-value">${doc.observaciones}</span></div>`;
+        }
         
         html += '</div>';
         

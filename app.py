@@ -532,7 +532,21 @@ def get_documentos():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM documentos ORDER BY fecha_procesamiento DESC")
+    
+    # Seleccionar TODOS los campos que necesitas ver
+    cursor.execute("""
+        SELECT 
+            id, archivo, numero_factura, cufe, fecha_emision,
+            nit_emisor, razon_social_emisor, 
+            pais_emisor, es_proveedor_exterior,
+            numero_documento_adquiriente, nombre_adquiriente,
+            subtotal, iva, total, moneda,
+            forma_pago, confianza, estado,
+            fecha_procesamiento, datos_json
+        FROM documentos 
+        ORDER BY fecha_procesamiento DESC
+    """)
+    
     documentos = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return jsonify(documentos)
@@ -771,7 +785,12 @@ def preview_documento(documento_id):
     cursor.execute("""
         SELECT archivo, numero_factura, cufe, razon_social_emisor,
                nombre_adquiriente, fecha_emision, total, estado, confianza,
-               texto_extraido, datos_json
+               texto_extraido, datos_json,
+               nit_emisor, nit_adquiriente, email_emisor, telefono_emisor,
+               direccion_emisor, ciudad_emisor, departamento_emisor, pais_emisor,
+               email_adquiriente, telefono_adquiriente, direccion_adquiriente,
+               ciudad_adquiriente, moneda, forma_pago, subtotal, iva, descuento,
+               regimen_fiscal, razon_social_adquiriente
         FROM documentos WHERE id = ?
     """, (documento_id,))
     
@@ -781,9 +800,18 @@ def preview_documento(documento_id):
     if not doc:
         return jsonify({'success': False, 'message': 'Documento no encontrado'}), 404
     
+    doc_dict = dict(doc)
+    
+    if doc_dict.get('datos_json'):
+        try:
+            datos_extra = json.loads(doc_dict['datos_json'])
+            doc_dict.update(datos_extra)
+        except:
+            pass
+    
     return jsonify({
         'success': True,
-        'documento': dict(doc),
+        'documento': doc_dict,
         'file_path': f"/uploads/{doc['archivo']}"
     })
 
@@ -891,7 +919,8 @@ def procesar_factura_completa(texto):
         'email_emisor': None,
         'direccion_emisor': None,
         'telefono_emisor': None,
-        'pais_emisor': None
+        'pais_emisor': None,
+        'campos_extraidos': 0
     }
     
     texto_limpio = texto.replace('\n', ' ').replace('\r', ' ')
@@ -1136,31 +1165,45 @@ def procesar_factura_completa(texto):
                 break
     
     # ============ PAÍS ============
-        pais_patterns = [
-            r'Pa[í]s[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ\s]+)',
-            r'Country[^:]*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑ\s]+)',
-            r'(Colombia|México|Perú|Chile|Argentina|Brasil|Ecuador|Venezuela|España|United\s+States)'
-        ]
+    pais = None
+    pais_patterns = [
+        r'Pa[íi]s[:\s]*([^\n]+)',
+        r'Country[:\s]*([^\n]+)',
+        r'(Colombia|México|Perú|Chile|Argentina|Brasil|Ecuador|Venezuela|España|United\s+States|USA)'
+    ]
 
-        for pattern in pais_patterns:
-            match = re.search(pattern, texto, re.IGNORECASE)
-            if match:
-                try:
-                    pais = match.group(1).strip()
-                except IndexError:
-                    pais = match.group(0).strip()
-
-            # Normalizar
-            if 'colomb' in pais.lower(): datos['pais_emisor'] = 'Colombia'
-            elif 'méxic' in pais.lower() or 'mexic' in pais.lower(): datos['pais_emisor'] = 'México'
-            elif 'per' in pais.lower(): datos['pais_emisor'] = 'Perú'
-            elif 'argentin' in pais.lower(): datos['pais_emisor'] = 'Argentina'
-            elif 'chile' in pais.lower(): datos['pais_emisor'] = 'Chile'
-            elif 'brasil' in pais.lower(): datos['pais_emisor'] = 'Brasil'
-            elif 'españ' in pais.lower() or 'spain' in pais.lower(): datos['pais_emisor'] = 'España'
-            elif 'united' in pais.lower() or 'states' in pais.lower() or 'usa' in pais.lower(): datos['pais_emisor'] = 'Estados Unidos'
-            else: datos['pais_emisor'] = pais[:30]
+    for pattern in pais_patterns:
+        match = re.search(pattern, texto, re.IGNORECASE)
+        if match:
+            try:
+                pais = match.group(1).strip()
+            except IndexError:
+                pais = match.group(0).strip()
             break
+
+    # Normalizar país
+    if pais:
+        pais_lower = pais.lower()
+        if 'colomb' in pais_lower: 
+            datos['pais_emisor'] = 'Colombia'
+        elif 'usa' in pais_lower or 'estados unidos' in pais_lower or 'united states' in pais_lower: 
+            datos['pais_emisor'] = 'Estados Unidos'
+        elif 'méxic' in pais_lower or 'mexic' in pais_lower: 
+            datos['pais_emisor'] = 'México'
+        elif 'per' in pais_lower: 
+            datos['pais_emisor'] = 'Perú'
+        elif 'argentin' in pais_lower: 
+            datos['pais_emisor'] = 'Argentina'
+        elif 'chile' in pais_lower: 
+            datos['pais_emisor'] = 'Chile'
+        elif 'brasil' in pais_lower or 'brazil' in pais_lower: 
+            datos['pais_emisor'] = 'Brasil'
+        elif 'españ' in pais_lower or 'spain' in pais_lower: 
+            datos['pais_emisor'] = 'España'
+        else: 
+            datos['pais_emisor'] = pais[:30]
+        
+        datos['campos_extraidos'] += 1
     
     # ============ MONEDA ============
     if 'USD' in texto or 'US$' in texto or 'dólar' in texto.lower() or 'dollar' in texto.lower():
@@ -1213,12 +1256,12 @@ def procesar_factura_completa(texto):
         r'Forma\s*de\s*pago[^:]*:\s*([A-Za-z\s]+)',
         r'Payment\s*Method[^:]*:\s*([A-Za-z\s]+)',
         r'Payment\s*Terms[^:]*:\s*([A-Za-z\s]+)',
-        r'(?:Transferencia|Consignación|Efectivo|Tarjeta|Cheque)\s*(?:bancaria)?'
+        r'(?:Transferencia|Consignación|Efectivo|Tarjeta|Cheque)\s*(?:bancaria)?\s*([A-Za-z]*)'
     ]
     
     for pattern in pago_patterns:
         match = re.search(pattern, texto, re.IGNORECASE)
-        if match:
+        if match and match.group(1):
             datos['forma_pago'] = match.group(1).strip()[:30]
             break
     
